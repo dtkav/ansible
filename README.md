@@ -1,5 +1,9 @@
 [![PyPI version](https://badge.fury.io/py/ansible.png)](http://badge.fury.io/py/ansible) [![PyPI downloads](https://pypip.in/d/ansible/badge.png)](https://pypi.python.org/pypi/ansible)
 
+Forking
+=======
+
+This is a fork to add ansible-conf, a tool that allows you to use the ansible configuration system as a standalone tool.
 
 Ansible
 =======

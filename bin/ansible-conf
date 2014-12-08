@@ -1,0 +1,106 @@
+#!/usr/bin/env python
+# (C) 2012, Michael DeHaan, <michael.dehaan@gmail.com>
+
+# This file is part of Ansible
+#
+# Ansible is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ansible is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+
+#######################################################
+
+#__requires__ = ['ansible']
+#import pkg_resources
+
+import sys
+import os
+import stat
+import yaml
+
+# Augment PYTHONPATH to find Python modules relative to this file path
+# This is so that we can find the modules when running from a local checkout
+# installed as editable with `pip install -e ...` or `python setup.py develop`
+local_module_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', 'lib')
+)
+sys.path.append(local_module_path)
+
+import ansible.constants as C
+import ansible.utils.template
+import ansible.inventory
+from ansible import errors
+from ansible import callbacks
+from ansible import utils
+from ansible.color import ANSIBLE_COLOR, stringc
+from ansible.callbacks import display
+
+
+def main(args):
+    ''' run ansible-conf operations '''
+
+    # create parser for CLI options
+    parser = utils.base_parser(
+        constants=C,
+        usage = "%prog",
+        connect_opts=False,
+        runas_opts=False,
+        subset_opts=True,
+        check_opts=False,
+        diff_opts=False
+    )
+    parser.add_option('-t', '--tags', dest='tags', default='all',
+        help="only run plays and tasks tagged with these values")
+    parser.add_option('--skip-tags', dest='skip_tags',
+        help="only run plays and tasks whose tags do not match these values")
+    parser.add_option('--flush-cache', dest='flush_cache', action='store_true',
+        help="clear the fact cache")
+    parser.add_option('--debug', dest='debug', action='store_true',
+        help="print debug information on config vars")
+
+    options, args = parser.parse_args(args)
+
+    only_tags = options.tags.split(",")
+    skip_tags = options.skip_tags
+    if options.skip_tags is not None:
+        skip_tags = options.skip_tags.split(",")
+
+    inventory = ansible.inventory.Inventory(options.inventory, debug=options.debug)
+    inventory.subset(options.subset)
+    if len(inventory.list_hosts()) == 0:
+        raise errors.AnsibleError("provided hosts list is empty")
+
+    hosts = inventory.get_hosts()
+    host_debug = {}
+    
+    for host in hosts:
+        vars = host.get_variables()
+        name = vars.pop('inventory_hostname')
+        host_debug.update(vars.pop('_debug', ''))
+        host_debug.update({'group_names': vars.pop('group_names')})
+        host_debug.update({'inventory_hostname_short': vars.pop('inventory_hostname_short')})
+        display(yaml.dump({name: vars}, explicit_start=True))
+        if options.debug:
+            display(yaml.dump(host_debug), color='cyan', stderr=True)
+
+
+if __name__ == "__main__":
+    display(" ", log_only=True)
+    display(" ".join(sys.argv), log_only=True)
+    display(" ", log_only=True)
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except errors.AnsibleError, e:
+        display("ERROR: %s" % e, color='red', stderr=True)
+        sys.exit(1)
+    except KeyboardInterrupt, ke:
+        display("ERROR: interrupted", color='red', stderr=True)
+        sys.exit(1)

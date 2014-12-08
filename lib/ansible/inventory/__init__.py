@@ -38,9 +38,13 @@ class Inventory(object):
 
     __slots__ = [ 'host_list', 'groups', '_restriction', '_also_restriction', '_subset', 
                   'parser', '_vars_per_host', '_vars_per_group', '_hosts_cache', '_groups_list',
-                  '_pattern_cache', '_vault_password', '_vars_plugins', '_playbook_basedir']
+                  '_pattern_cache', '_vault_password', '_vars_plugins', '_playbook_basedir',
+                  '_debug']
 
-    def __init__(self, host_list=C.DEFAULT_HOST_LIST, vault_password=None):
+    def __init__(self, host_list=C.DEFAULT_HOST_LIST, vault_password=None, debug=False):
+
+        # if debug, record additional information like variable origins
+        self._debug = debug
 
         # the host file file, or script path, or list of hosts
         # if a list, inventory data will NOT be loaded
@@ -411,6 +415,12 @@ class Inventory(object):
                 return group
         return None
 
+    def _record_origins(self, vars, origin):
+        for key in vars.keys():
+            vars.setdefault('_debug', {})
+            vars['_debug'].setdefault(key, {})
+            vars['_debug'][key]['origin'] = origin + '.yml'
+
     def get_group_variables(self, groupname, update_cached=False, vault_password=None):
         if groupname not in self._vars_per_group or update_cached:
             self._vars_per_group[groupname] = self._get_group_variables(groupname, vault_password=vault_password)
@@ -432,6 +442,9 @@ class Inventory(object):
 
         # Read group_vars/ files
         vars = utils.combine_vars(vars, self.get_group_vars(group))
+
+        if self._debug:
+            self._record_origins(vars, groupname)
 
         return vars
 
@@ -476,6 +489,9 @@ class Inventory(object):
 
         # Read host_vars/ files
         vars = utils.combine_vars(vars, self.get_host_vars(host))
+
+        if self._debug:
+            self._record_origins(vars, host.name)
 
         return vars
 
